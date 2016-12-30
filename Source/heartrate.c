@@ -129,12 +129,44 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 /*********************************************************************
  * GLOBAL VARIABLES
  */
+//#define CH_DATA_SIZE 10     // should be 9+1 for 3 channels
+#define CH_DATA_SIZE 9     // 9 bytes when no status is used
+//#define PKT_DATA_SIZE 18
+//#define NUM_PKTS 6
+#define NUM_PKTS 18           // 8 when NUM_BUF = 16, 9 when 18, 12 when 24
+//#define NUM_BUF  10       // use this when status byte is read
+//#define NUM_BUF  12         // use this when no status byte is read
+#define NUM_BUF 36          //  22 data + 2 error for supporting 320samples/sec
+//#define PAD_SIZE 8          // 108 bytes sent out as 18 * 6
+#define PAD_SIZE 0          // use this when no status byte is read
+//#define BUF_SIZE ((CH_DATA_SIZE * NUM_BUF) + PAD_SIZE)  // totally 108 bytes sent out as NUM_PKTS * PKT_DATA_SIZE
+
+//1299 BUFFER
+#define CH_DATASIZE 3
+#define NUM_CH 8
+#define STATUSSIZE 3
+#define BUF_SIZE 36   //12*3= 2*6*3 6*2ms *2 =24ms
+#define PKT_DATA_SIZE 27
+
+uint8 dataBufX[BUF_SIZE];
+uint8 dataBufY[BUF_SIZE];
+//uint8 dataBufZ[BUF_SIZE];
+uint8 rptr = 0;
+uint8 wptr = 0;
+uint8 *recv_buf = dataBufX;
+uint8 *send_buf = NULL;
+uint8 dataReadyFlag = 0;
+
+int counter_BLE = 0;
+
 uint32 count_num = 0;
 
 uint8 i2c_buffer[I2C_BUFFER_SIZE];   //i2c
 uint16 i2c_bufferIndex = 0;          //i2c
 uint8 i2c_receivebuffer[I2C_BUFFER_SIZE];
 uint16 i2c_bufferreceiveIndex = 0;
+
+
 /*********************************************************************
  * EXTERNAL VARIABLES
  */
@@ -456,33 +488,6 @@ void ecg_Init( uint8 task_id )
  *
  * @return  events not processed
  */
-//#define CH_DATA_SIZE 10     // should be 9+1 for 3 channels
-#define CH_DATA_SIZE 9     // 9 bytes when no status is used
-//#define PKT_DATA_SIZE 18
-//#define NUM_PKTS 6
-#define NUM_PKTS 18           // 8 when NUM_BUF = 16, 9 when 18, 12 when 24
-//#define NUM_BUF  10       // use this when status byte is read
-//#define NUM_BUF  12         // use this when no status byte is read
-#define NUM_BUF 36          //  22 data + 2 error for supporting 320samples/sec
-//#define PAD_SIZE 8          // 108 bytes sent out as 18 * 6
-#define PAD_SIZE 0          // use this when no status byte is read
-//#define BUF_SIZE ((CH_DATA_SIZE * NUM_BUF) + PAD_SIZE)  // totally 108 bytes sent out as NUM_PKTS * PKT_DATA_SIZE
-
-//1299 BUFFER
-#define CH_DATASIZE 3
-#define NUM_CH 8
-#define STATUSSIZE 3
-#define BUF_SIZE ((CH_DATASIZE * NUM_CH) + STATUSSIZE)
-#define PKT_DATA_SIZE 27
-
-uint8 dataBufX[BUF_SIZE];
-uint8 dataBufY[BUF_SIZE];
-//uint8 dataBufZ[BUF_SIZE];
-uint8 rptr = 0;
-uint8 wptr = 0;
-uint8 *recv_buf = dataBufX;
-uint8 *send_buf = NULL;
-uint8 dataReadyFlag = 0;
 
 
 uint16 ecg_ProcessEvent( uint8 task_id, uint16 events )
@@ -673,90 +678,61 @@ static void ecg_HandleKeys( uint8 shift, uint8 keys )
  *
  * @return  none
  */
+int checkpoint3;
+int checkpoint4;
+int checkpoint6;
+int checkpoint7;
+int checkpoint8;
+int counter_now=0;
 static void ecgMeasNotify(void)
 {
   static uint16 counter=0;
   uint8 i;
-//  uint8 burstData[20] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-//  uint8 burstData[12] = {0,0,0xD1,0xD2,0xD3,0xD4,0xD5,0xD6,0xD7,0xD8,0xD9,0xFF};  
 
-//  burstData[0] = (counter & 0xFF00)>>8;
-//  burstData[1] = (counter & 0xFF);
+  ecgMeas.len = 18;
   
-//  ecgMeas.len = 20;  // just can't change it
-  ecgMeas.len = 20;
-  
-//test without ecg input 
-//  for(int k=0; k<27; k++)
- //   send_buf[k] = 1;
-  
+
   
     //----read data byte from spi
     
     //1 status(3 BYTES) + 8 channel * 3 BYTES(24bits)=27 B
-    uint8 status_buffer[3];
-    uint8 data_buffer[24];
-   
-   //test for bluetooth control
-   // for(int i=0; i< 27; i++)
-   //   send_buf[i] = i;         
+  
     
-    osal_memcpy(&ecgMeas.value[0], &send_buf[0], 27);   //maximum size?
+    if(dataReadyFlag == 1)
+    {
+      if(counter_BLE == 0)
+      {
+      checkpoint3 = ecgMeas.value[0];
+      checkpoint4 = send_buf[0];
+      //ecgMeas.value[0] = send_buf[0];
+      }
+      osal_memcpy(&ecgMeas.value[0], &send_buf[counter_BLE * 18], 18);   //maximum size?
+      
+      if(counter_BLE == 0)
+      {   
+      checkpoint6 = ecgMeas.value[0];
+      checkpoint7 = send_buf[0];
+      /*test for buffer's first byte data read.
+      counter_now++;
+      if(counter_now > 10)
+        while(1)
+          ;
+      */
+      //ecgMeas.value[0] = send_buf[0];
+      }
     
- //   if(dataReadyFlag == 1)
- //  {
+      
       if(ecg_MeasNotify( gapConnHandle, &ecgMeas) == SUCCESS)
       {
-        dataReadyFlag = 0;  
-        send_buf = NULL;
-      }
-    
-    
- 
-
-  /*
-    osal_memcpy(&burstData[2], &dataBuf[wptr], 10);
-    osal_memcpy(&ecgMeas.value, burstData, 12);
-    
-  //  if (ecg_MeasNotify( gapConnHandle, &ecgMeas ) == SUCCESS)
-    {
-      ecg_MeasNotify( gapConnHandle, &ecgMeas);
-      counter++;
-      wptr++;
-      if (wptr == NUM_BUF)
-        wptr = 0;
-    }
-  */
-    
-  //    burstData[0] = (counter & 0xFF00)>>8;
-  //    burstData[1] = (counter & 0xFF);
-  //    osal_memcpy(&burstData[2], &dataBuf[wptr * CH_DATA_SIZE], 10);    
-  //    osal_memcpy(&ecgMeas.value, burstData, 12);
-/*****    
-    for(i=0; i<6; i++) //since it only has 4 channel, so it's counter_high+ counter_low+ 4 channel
-    {
-      ecgMeas.value[0] = (counter & 0xFF00)>>8;
-      ecgMeas.value[1] = (counter & 0xFF);
-      osal_memcpy(&ecgMeas.value[2], &send_buf[wptr * PKT_DATA_SIZE], PKT_DATA_SIZE);  //ecgMeas.len=2+18
-  //    osal_memcpy(&ecgMeas.value,burstData, 12);
-      if (ecg_MeasNotify( gapConnHandle, &ecgMeas) == SUCCESS)
-      {
-        counter++;
-        wptr++;
-        if (wptr == NUM_PKTS)   //When it send out all data in buffer
+        counter_BLE++;
+        if(counter_BLE == 2)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
         {
-          wptr = 0;
+          counter_BLE = 0;
+          dataReadyFlag = 0;  
           send_buf = NULL;
-          dataReadyFlag = 0;        
-          break;
         }
-  //      burstData[0] = (counter & 0xFF00)>>8;
-  //      burstData[1] = (counter & 0xFF);
-  //      osal_memcpy(&burstData[2], &dataBuf[wptr * CH_DATA_SIZE], 10);
-  //      osal_memcpy(&ecgMeas.value, burstData, 12);
       }
     }
-*****/
   
 }
 
@@ -958,6 +934,9 @@ static void ecgBattPeriodicTask( void )
 }
 
 int counter_ADS = 0;
+int checkpoint1;
+int checkpoint2;
+int checkpoint5;
 /*********************************************************************
 *********************************************************************/
 //******************************************************************************
@@ -968,7 +947,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
 //  static uint8 rd_count = 0;
 //  static uint8 first_time = 1;
   uint8 *tmp_buf;
-  
+  uint8 blank_buf;
   EA = 0;
   IRCON2 &= ~0x08;    // clear Port 1 interrupt flag
 
@@ -981,68 +960,46 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
   
     //spiWriteByte(_RDATA);
      
-    tmp_buf = &recv_buf[rptr * CH_DATA_SIZE];
+    tmp_buf = &recv_buf[0];
     
     //TI_ADS1293_SPIStreamRead((tmp_buf), BUF_SIZE);
     
     /* test RDATA mode */
     CS_ADS = 0; 
-    spiWriteByte(_RDATA);
+    spiWriteByte(_RDATA);    
+    us_delay(10);
     
     //read and dismiss the 3 status bytes of ADS.
-    spiReadByte((tmp_buf), 0xFF);
-    spiReadByte((tmp_buf), 0xFF);
-    spiReadByte((tmp_buf), 0xFF);
-    for(int i=counter_ADS; i < 3; i++)
+    for(int i = 0; i<8; i++)
     {
-      spiReadByte((tmp_buf+i), 0xFF);                                             // Read data     
+      spiReadByte((&blank_buf), 0xFF);
+      spiReadByte((&blank_buf), 0xFF);
+      spiReadByte((&blank_buf), 0xFF);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+      spiReadByte((tmp_buf+i+counter_ADS), 0xFF);                                             // Read data     
     }
     counter_ADS = counter_ADS + 3;
-    CS_ADS = 1;       
+    CS_ADS = 1;
     
-    
-    //test for bluetooth control
-    //for(int i=0; i< 27; i++)
-    // tmp_buf[i] = i;   
-    
-    //TI_ADS1293_SPIStreamReadReg(tmp_buf, CH_DATA_SIZE);                       // read adc output into buf
-    //rptr++;
-    
-    if (!dataReadyFlag)    //if the data is sent out through bluetooth
-      {
-        send_buf = recv_buf;
-        if (recv_buf == dataBufX)
-          recv_buf = dataBufY;
-//        else if (recv_buf == dataBufY)
-//          recv_buf = dataBufZ;
-        else
-          recv_buf = dataBufX;
-        dataReadyFlag = 1;
-      }
- /*   
-    if (rptr == NUM_BUF-2)
+    //no flag contrain, no ADS waiting, keep data continuous.
+    if(counter_ADS > 35)  //36bytes will takes 12*2ms = 24ms or 12*4ms= 48ms
     {
-      tmp_buf = &recv_buf[rptr * CH_DATA_SIZE];
-      TI_ADS1293_SPIAutoIncReadReg(TI_ADS1293_ERROR_LOD_REG, &tmp_buf[3], 7);
-      tmp_buf[10] = battMeasure();
-      rptr = 0;
-//      if (send_buf == NULL)
+      checkpoint1 = dataBufY[0];
+      checkpoint2 = dataBufX[0];
       
-      
-      if (!dataReadyFlag)
-      {
-        send_buf = recv_buf;
-        if (recv_buf == dataBufX)
-          recv_buf = dataBufY;
-//        else if (recv_buf == dataBufY)
-//          recv_buf = dataBufZ;
-        else
-          recv_buf = dataBufX;
-        dataReadyFlag = 1;
-      }
-//      osal_set_event(ecg_TaskID, ECG_PERIODIC_EVT);
-    }
-*/
+      send_buf = recv_buf;
+      checkpoint5 = send_buf[0];
+      if (recv_buf == dataBufX)  //keep sending to another buffer.
+        recv_buf = dataBufY;
+      else
+        recv_buf = dataBufX;
+      dataReadyFlag = 1; 
+      counter_ADS = 0;
+      checkpoint8 = send_buf[0];
+
+    } 
   }
 
   EA = 1;
