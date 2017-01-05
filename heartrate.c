@@ -1,4 +1,4 @@
-/**************************************************************************************************
+/*************************************************************************************************
   Filename:       heartrate.c
   Revised:        $Date $
   Revision:       $Revision $
@@ -22,7 +22,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
   its documentation for any purpose.
 
   YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
-  PROVIDED ìAS ISî WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+  PROVIDED ‚ÄúAS IS‚Äù WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
   INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
   NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
   TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
