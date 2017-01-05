@@ -2,12 +2,9 @@
   Filename:       heartrate.c
   Revised:        $Date $
   Revision:       $Revision $
-
   Description:    This file contains the heart rate sample application 
                   for use with the CC2540 Bluetooth Low Energy Protocol Stack.
-
 Copyright 2011 Texas Instruments Incorporated. All rights reserved.
-
   IMPORTANT: Your use of this Software is limited to those specific rights
   granted under the terms of a software license agreement between the user
   who downloaded the software, his/her employer (which must be your employer)
@@ -20,9 +17,8 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
   the foregoing purpose, you may not use, reproduce, copy, prepare derivative
   works of, modify, distribute, perform, display or sell this Software and/or
   its documentation for any purpose.
-
   YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
-  PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+  PROVIDED ¡°AS IS¡± WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
   INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
   NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
   TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
@@ -32,7 +28,6 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
   OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, COST OF PROCUREMENT
   OF SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
   (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
-
   Should you have any questions regarding your right to use this Software,
   contact Texas Instruments Incorporated at www.TI.com. 
 **************************************************************************************************/
@@ -64,7 +59,8 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #include "TI_ADS1293_register_settings.h"
 
 #include "ads1299.h"
-#include "CC2541_i2c.h"
+#include "hal_i2c.h"
+#include "HR_module.h"
 /*********************************************************************
  * MACROS
  */
@@ -91,7 +87,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 
 // vishy: ios minimum interval is 20ms: change 7 to 16
 // How often to perform heart rate periodic event (vishy: change 7 to 20)
-#define DEFAULT_ECG_PERIOD                    14
+#define DEFAULT_ECG_PERIOD                    7//14
 
 // Whether to enable automatic parameter update request when a connection is formed
 #define DEFAULT_ENABLE_UPDATE_REQUEST         FALSE
@@ -145,7 +141,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #define CH_DATASIZE 3
 #define NUM_CH 8
 #define STATUSSIZE 3
-#define BUF_SIZE 36   //12*3= 2*6*3 6*2ms *2 =24ms
+#define BUF_SIZE 54   //12*3= 2*6*3 6*2ms *2 =24ms
 #define PKT_DATA_SIZE 27
 
 uint8 dataBufX[BUF_SIZE];
@@ -161,12 +157,13 @@ int counter_BLE = 0;
 
 uint32 count_num = 0;
 
-uint8 i2c_buffer[I2C_BUFFER_SIZE];   //i2c
-uint16 i2c_bufferIndex = 0;          //i2c
-uint8 i2c_receivebuffer[I2C_BUFFER_SIZE];
-uint16 i2c_bufferreceiveIndex = 0;
+  //heart rate module
+uint8 buffer_w[2] = {0, 0};  //data to write
+uint8 buffer_w_2[1];
 
+uint8 checkpoint1 = 0;       //data that read back
 
+uint8 abc1; //test point
 /*********************************************************************
  * EXTERNAL VARIABLES
  */
@@ -301,6 +298,7 @@ static const gapBondCBs_t ecgBondCB =
  *
  * @return  none
  */
+
 void ecg_Init( uint8 task_id )
 {
   ecg_TaskID = task_id;
@@ -411,17 +409,19 @@ void ecg_Init( uint8 task_id )
   //vishy
   P1DIR &= ~0x02; // force P1.1 as input: with Vlithium
        
-//  test_spi();   
-  // Configure DRDYB (P1_7) for ADS1293
+  // Configure DRDYB (P1_7) for ADS1299
   P1DIR &= ~0x80;     //P1_7 as input                                                         // pin1.7 is input
-  PICTL |= 0x04;                                                                // falling edge interrupt
-  IRCON2 &= ~0x08;                                                             // clear Port 1 interrupt flag
-  P1IFG &= ~0x80;                                                              // clear Port1.7 pin status flag
+  PICTL |= 0x04;     // falling edge interrupt
+  IRCON2 &= ~0x08;   // clear Port 1 interrupt flag
+  P1IFG &= ~0x80;    // clear Port1.7 pin status flag
   
   P1IEN |= 0x80;    // enable P1_7 interrupt
  
-  IEN2  |= 0x10;       // TEST ???    mute interrupt                             // enable Port1 interrupt
-//  EA = 1;                                                                      // enable global interrupt  
+  IEN2  |= 0x10;       // TEST ???    mute interrupt      // enable Port1 interrupt
+  
+  
+  
+//  EA = 1;           // enable global interrupt  
   delay_init();
   
   //make sure every digital input is low.
@@ -429,43 +429,129 @@ void ecg_Init( uint8 task_id )
   ms_delay(200);
   TI_ADS1293_SPISetup();   // Initilaize CC254x SPI Block 
 
-  /***** test delay function
-   P1SEL &= 0x01;      // GPIO.
-    P1DIR |= 0x01;      // Output.
-    P1_0 = 0;           // LED1 off.
-  while(1)
-   {
-     P1_0 ^= 1;
-     ms_delay(1000);
-   }
+  ads1299_set_up();
+  
+  //before doing any operation, I2CSTAT is 0xF8, no interrupt generated 
+  /* Configure DRDYB (P2_0) as interrupt for HR module */ 
+  P2DIR &= ~0x01;     //P2_0 as input                                                         // pin1.7 is input
+  PICTL |= 0x08;     // falling edge interrupt
+  IRCON2 &= ~0x01;   // clear Port 2 interrupt flag
+  P2IFG &= ~0x01;    // clear Port2.0 pin status flag
+  
+  P2IEN |= 0x01;    // enable P2_0 interrupt
+ 
+  IEN2  |= 0x02;      // enable Port2 interrupt
+  
+ // EA = 0;   //to make sure interrupt only generated after all configuration
+ 
+  
+  /***test for heart rate---I2C. */ 
+   /* Set up the I2C interface 
+  HalI2CInit( i2cClock_267KHZ ); // I2C clock rate
+
+  buffer_w[0] = INT_STATUS;      //clear that power up interrupt by read interrupt status register //works
+  HalI2CWrite(HR_ID, 1, buffer_w, 0);
+  HalI2CRead(HR_ID, 1, &checkpoint1);
+  //test point: at here the HR_INT is still high
+  // looks WORKing well, goes to heart rate's ISR not so frequently 
+
+  buffer_w[0] = PART_ID;      //clear that power up interrupt by read interrupt status register //works
+  HalI2CWrite(HR_ID, 1, buffer_w, 0);
+  HalI2CRead(HR_ID, 1, &checkpoint1);
+  
+
+  
+  buffer_w[0] = MODE_CFR;
+  buffer_w[1] = 0x40;         //reset all registers of HR module, //reset works
+  HalI2CWrite(HR_ID, 2, buffer_w, 1);
+ */
+  
+  
+  
+  //test point: after set mode=HR, HR_INT is always HIGH.
+  //!wait--but this interrupt is not generated by p2.0
+  //!!what?---generated by I2C 
+  
+  
+  /*purpose: trying to test to figure out "what situation the interrupt will be keeping generated"
+  //-->clear SI won't affect it is still in status to generate interrupt! kind of automatically.
+  I2CCFG = (I2CCFG & ~0x08) | 0x20;      
+  while ((I2CCFG & 0x08) == 0);
+  while (I2CSTAT == 0x18) ;
+  I2CCFG &= ~0x20;
+  I2CCFG = (I2CCFG & ~0x08);
   */
-   ads1299_set_up();
   
-   
-  /***test for heart rate---I2C.
-  START_ADS = 0;
-  // Enable I2C on CC2541.
-  I2CWC &= ~0x80;
-  // Clear I2C (P2) CPU interrupt flag.
-  P2IF = 0;
-  // Enable interrupt from I2C by setting [IEN2.P2IE = 1].
-  IEN2 |= IEN2_P2IE;  
-  // Enable global interrupts.
-  EA = 1;
-  // Enable the I2C module with 33 kHz clock rate.
-  // The STArt bit signals a master.
-  I2CCFG = (I2CCFG & ~I2CCFG_CR) | I2CCFG_CR_DIV_960 | I2CCFG_ENS1 | I2CCFG_STA;
   
-  i2c_buffer[0] = 0x06;  //0000 0110 mode configuration register addr
-  i2c_buffer[1] = 0x02;  //set HR mode
-  i2c_buffer[2] = 0x01;  //interrupt enable register addr
-  i2c_buffer[3] = 0x20;  //enable HR ready interrupt
-  i2c_buffer[4] = 0x05;  //read by sending FIFO Data register address
-  for (uint8 i = 5; i < I2C_BUFFER_SIZE; i++)
+/*    while(1)  
+    ;
+  
+
+  abc1 = I2CCFG;
+  
+  buffer_w[0] = MODE_CFR;
+  buffer_w[1] = 0x02;         //set HR only mode 
+  HalI2CWrite(HR_ID, 2, buffer_w, 1);
+  //test pOint: only read once after set mode will make it keep low
+ 
+  //test point: the interrupt will cosumes all the time, it even won't go to the next instruction in main function.
+  //---> solve it by using dataReadyFlag.
+  //IIC is even worse, it will consume all the time!! all the time.
+        while(1)
   {
-      i2c_buffer[i] = 0x16;
+     ;
   }
-  */  
+
+  
+  
+      buffer_w[0] = INT_STATUS;      //clear that power up interrupt by read interrupt status register //works
+    HalI2CWrite(HR_ID, 1, buffer_w, 0);
+    HalI2CRead(HR_ID, 1, &checkpoint1); 
+
+ 
+  
+  
+  
+  us_delay(500);
+  buffer_w[0] = INT_EN;
+  buffer_w[1] = 0x80;         // mask HR interrupt 
+  HalI2CWrite(HR_ID, 2, buffer_w, 1);
+  
+  buffer_w[0] = SPO2_CONFIG;
+  buffer_w[1] = 0x03;         //set 50SPS, LED pulse width 1600us
+  HalI2CWrite(HR_ID, 2, buffer_w, 1);
+ 
+  buffer_w[0] = LED_PWC;
+  buffer_w[1] = 0x03;         //set 
+  HalI2CWrite(HR_ID, 2, buffer_w, 1);
+    
+  ms_delay(2);
+  buffer_w[0] = INT_EN;
+  ms_delay(2);
+  HalI2CWrite(HR_ID, 1, buffer_w, 0);
+  HalI2CRead(HR_ID, 1, &checkpoint1);
+  
+  EA = 1;
+  
+  
+  
+  int a = 0;
+  while(1) //is it because reading is after INT_EN register writng operation?
+    a++;
+  ms_delay(2);
+  buffer_w[0] = MODE_CFR;
+  ms_delay(2);
+  HalI2CWrite(HR_ID, 1, buffer_w, 0);
+  HalI2CRead(HR_ID, 1, &checkpoint1);
+  
+  us_delay(200);
+  buffer_w[0] = FIFO_DATA;
+  HalI2CWrite(HR_ID, 1, buffer_w, 0);
+  HalI2CRead(HR_ID, 1, buffer_w);
+*/
+
+
+ 
 //  reg1 = TI_ADS1293_SPIReadReg(TI_ADS1293_ALARM_FILTER_REG);
 //  if (TI_ADS1293_SPIReadReg(TI_ADS1293_ALARM_FILTER_REG) != 0x33)
 //      asm("NOP");
@@ -552,12 +638,8 @@ uint16 ecg_ProcessEvent( uint8 task_id, uint16 events )
     if (dataReadyFlag)
     {
       ecgPeriodicTask();
-//      dataReadyFlag = 0;
     }
-//    ecgPeriodicTask();
-//    ecgPeriodicTask();
-//    ecgPeriodicTask();
-    
+
     return (events ^ ECG_PERIODIC_EVT);
   }  
 
@@ -655,7 +737,6 @@ static void ecg_HandleKeys( uint8 shift, uint8 keys )
       GAP_SetParamValue( TGAP_GEN_DISC_ADV_INT_MIN, DEFAULT_FAST_ADV_INTERVAL );
       GAP_SetParamValue( TGAP_GEN_DISC_ADV_INT_MAX, DEFAULT_FAST_ADV_INTERVAL );
       GAP_SetParamValue( TGAP_GEN_DISC_ADV_MIN, DEFAULT_FAST_ADV_DURATION );
-
       // toggle GAP advertisement status
       GAPRole_GetParameter( GAPROLE_ADVERT_ENABLED, &status );
       status = !status;
@@ -678,54 +759,26 @@ static void ecg_HandleKeys( uint8 shift, uint8 keys )
  *
  * @return  none
  */
-int checkpoint3;
-int checkpoint4;
-int checkpoint6;
-int checkpoint7;
-int checkpoint8;
-int counter_now=0;
+
 static void ecgMeasNotify(void)
 {
-  static uint16 counter=0;
   uint8 i;
 
   ecgMeas.len = 18;
-  
-
-  
+ 
     //----read data byte from spi
     
     //1 status(3 BYTES) + 8 channel * 3 BYTES(24bits)=27 B
-  
-    
+
     if(dataReadyFlag == 1)
     {
-      if(counter_BLE == 0)
-      {
-      checkpoint3 = ecgMeas.value[0];
-      checkpoint4 = send_buf[0];
-      //ecgMeas.value[0] = send_buf[0];
-      }
+      
       osal_memcpy(&ecgMeas.value[0], &send_buf[counter_BLE * 18], 18);   //maximum size?
-      
-      if(counter_BLE == 0)
-      {   
-      checkpoint6 = ecgMeas.value[0];
-      checkpoint7 = send_buf[0];
-      /*test for buffer's first byte data read.
-      counter_now++;
-      if(counter_now > 10)
-        while(1)
-          ;
-      */
-      //ecgMeas.value[0] = send_buf[0];
-      }
-    
-      
+       
       if(ecg_MeasNotify( gapConnHandle, &ecgMeas) == SUCCESS)
       {
         counter_BLE++;
-        if(counter_BLE == 2)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
+        if(counter_BLE == 3)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
         {
           counter_BLE = 0;
           dataReadyFlag = 0;  
@@ -934,9 +987,7 @@ static void ecgBattPeriodicTask( void )
 }
 
 int counter_ADS = 0;
-int checkpoint1;
-int checkpoint2;
-int checkpoint5;
+
 /*********************************************************************
 *********************************************************************/
 //******************************************************************************
@@ -954,7 +1005,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
 
   if (P1IFG & 0x80)
   {
-    P1IFG &= ~0x80;                                                            // clear interrupt status flag
+    P1IFG &= ~0x80;               // clear interrupt status flag
 
     // Read ECG Data
   
@@ -969,7 +1020,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
     spiWriteByte(_RDATA);    
     us_delay(10);
     
-    //read and dismiss the 3 status bytes of ADS.
+    //read and dismiss the 3 status bytes+ 7*3 data bytes of ADS.
     for(int i = 0; i<8; i++)
     {
       spiReadByte((&blank_buf), 0xFF);
@@ -984,171 +1035,72 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
     CS_ADS = 1;
     
     //no flag contrain, no ADS waiting, keep data continuous.
-    if(counter_ADS > 35)  //36bytes will takes 12*2ms = 24ms or 12*4ms= 48ms
-    {
-      checkpoint1 = dataBufY[0];
-      checkpoint2 = dataBufX[0];
-      
+    if(counter_ADS > 53)  //36bytes will takes 12*2ms = 24ms or 12*4ms= 48ms
+    {      
       send_buf = recv_buf;
-      checkpoint5 = send_buf[0];
       if (recv_buf == dataBufX)  //keep sending to another buffer.
         recv_buf = dataBufY;
       else
         recv_buf = dataBufX;
       dataReadyFlag = 1; 
       counter_ADS = 0;
-      checkpoint8 = send_buf[0];
-
     } 
   }
 
   EA = 1;
 }
 
-int mark_reg1_set = 0;
-int mark_reg2_set = 0;
-int mark_start = 0;  //start or restart
-int read_set1 = 0;
-/*I2C ISR
-#pragma vector = I2C_VECTOR
-__interrupt void I2C_ISR(void)
-{ 
 
-    // Clear I2C CPU interrupt flag.
-    P2IF = 0;
+//interrupt should not process data!!!!!!!!!!!
+//how much time it take to read data? interrupt shouldn't keep too long time.
+//interrupt most of time used to set flag and process data in main function.
 
-    if(mark_start == 0)
-    {
-        // If a Start or Restart condition has been transmitted ...
-        if (I2CSTAT == 0x08 || I2CSTAT == 0x10)
-        {
-            // Send Slave address and R/W access.
-            I2CDATA = I2C_HR_WADD;
+//observe: even after i comment the ISR, if i enable PORT2's interrupt, it will keep calling ISR.
+//try: maybe mask SI after using it in I2C transfer will be useful.
 
-            // End Start condition.
-            I2CCFG &= ~I2CCFG_STA;
-           
-        
-        }
-      
-    
-    // If finished transmitting ...
-      if (i2c_bufferIndex > I2C_BUFFER_SIZE)
-      {
-          // Generate Stop condition.
-          I2CCFG |= I2CCFG_STO;
-        
-
-        // Disable interrupt from I2C by setting [IEN2.I2CIE = 0].
-        IEN2 &= ~IEN2_P2IE;
-
-        
-        // Set SRF05EB LED1.
-        P1_0 = 1;   
-      }
-
-      // If Slave address or Data byte has been transmitted and acknowledged ...
-      else if (I2CSTAT == 0x18 || I2CSTAT == 0x28)
-      {
-          // Send next I2C byte
-           
-          if(i2c_bufferIndex == 2)  //restart for configuring 2nd register
-          {        
-            I2CCFG |= I2CCFG_STA;  //send start bit
-          }
-          else if(i2c_bufferIndex == 4) //stop HR setup
-          {
-            mark_start = 1;        //setup is finished
-           // I2CCFG = (I2CCFG & ~I2CCFG_CR) | I2CCFG_CR_DIV_960 | I2CCFG_ENS1 | I2CCFG_AA | I2CCFG_STA;
-          }   
-          else
-            I2CDATA = i2c_buffer[i2c_bufferIndex++];
-      }
-    }
-    
-    else  //set for data receive
-    {
-      if (I2CSTAT == 0x08 || I2CSTAT == 0x10)
-      {
-          // Send Slave address and R/W access.
-        if(read_set1 == 0)  //first byte after start
-        {
-          I2CDATA = I2C_HR_WADD;
-          read_set1 = 1;
-        }
-        else                //second byte after start
-          I2CDATA = I2C_HR_RADD;
-      
-          // End Start condition.
-          I2CCFG &= ~I2CCFG_STA;
-      }
-      
-      else if (I2CSTAT == 0x18 || I2CSTAT == 0x28)
-      {
-        if(i2c_bufferIndex == 5)
-          I2CCFG |= I2CCFG_STA;
-        else
-          // Send next I2C byte        
-          I2CDATA = i2c_buffer[i2c_bufferIndex++]; 
-      }
-
-      
-    }
-    
-    
-   
-    // I2CCFG.SI flag must be cleared by software at the end of the ISR.
-    I2CCFG &= ~I2CCFG_SI;
-}
-*/
-
-
-/* If a Data byte has been received and acknowledge has been returned...
-      else if (I2CSTAT == 0x50)
-      {
-          // Read Data byte.
-        //problem: it just keep reading, not knowing it's ready or not.
-          i2c_receivebuffer[i2c_bufferreceiveIndex++] = I2CDATA;
-      }
-      */
-
-
-
-
-/*
-//for HR interrupt p2_0
+//16*20=320ms   16*4=64bytes--0.03ms*8*64=
+/*for HR interrupt p2_0
 #pragma vector = P2INT_VECTOR
-__near_func __interrupt void TI_ADS1299_HR_INT(void)
+__interrupt void TI_ADS1299_HR_INT(void)
 {
 //  static uint8 rd_count = 0;
 //  static uint8 first_time = 1;
   uint8 *tmp_buf;
   
   EA = 0;
-  IRCON2 &= ~0x01;    // clear Port 1 interrupt flag
-
-
+  IRCON2 &= ~0x01;    // clear Port 2 interrupt flag
+  
+ // I2CCFG = I2CCFG & (~0x08);
+    
+  //check point: breakpoint set here, log a lot of time, show I2C keep go inside the ISR
+  //-->it won't affect HR_INT going low or high, but it will take time to affect BLE?
   if (P2IFG & 0x01)
   {
-    P1IFG &= ~0x01;                                                            // clear interrupt status flag
-    
-    for(int i = 0; i < 4; i++)   //read 4 bytes sample
+    if(dataReadyFlag == 0)
     {
-      if (I2CSTAT == 0x50)
-        {
-            // Read Data byte.
-          //problem: it just keep reading, not knowing it's ready or not.
-            i2c_receivebuffer[i2c_bufferreceiveIndex++] = I2CDATA;
-        }
+      P1IFG &= ~0x01;            // clear p2.0 interrupt status flag
+      
+      tmp_buf = &recv_buf[0];
+      
+      //buffer_w_2[0] = INT_EN;
+      buffer_w_2[0] = FIFO_DATA;
+      HalI2CWrite(HR_ID, 1, buffer_w_2, 0);
+      
+      //HalI2CRead(HR_ID, 1, tmp_buf);
+      
+      HalI2CRead(HR_ID, 36, tmp_buf);
+      send_buf = recv_buf;
+      if (recv_buf == dataBufX)  //keep sending to another buffer.
+        recv_buf = dataBufY;
+      else
+        recv_buf = dataBufX;
+      dataReadyFlag = 1; 
+      counter_ADS = 0;
     }
   }
-
   EA = 1;
 }
 */
-
-
-
 
 
 
