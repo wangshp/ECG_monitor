@@ -56,8 +56,11 @@
 
 #include "ioCC2541.h"
 
+//user   
 #include "HR_module.h"
 #include "hal_i2c.h"
+#include "Haptics_2605.h"
+#include "DRV2605.h"
 
 /**************************************************************************************************
  * FUNCTIONS
@@ -90,6 +93,7 @@ uint8 x[20],i;
 uint8 len;
 uint8 buffer_w[2];
 uint8 checkpoint1;
+uint8 buffer_w3[2];
 int main(void)
 {
 
@@ -100,27 +104,29 @@ int main(void)
     uint32 a = 10000;
     
     
+ 
     
-      /* Configure DRDYB (P2_0) as interrupt for HR module */ 
-    P2DIR &= ~0x01;     //P2_0 as input                                                         // pin1.7 is input
-    PICTL |= 0x08;     // falling edge interrupt
-    IRCON2 &= ~0x01;   // clear Port 2 interrupt flag
-    P2IFG &= ~0x01;    // clear Port2.0 pin status flag
+ 
     
-    P2IEN |= 0x01;    // enable P2_0 interrupt
-   
-    IEN2  |= 0x02;      // enable Port2 interrupt
-    
-   // EA = 0;   //to make sure interrupt only generated after all configuration
-   
-    IEN2  &= (~0x02);      // 111 disable Port2 interrupt-->to know if I2C work in this way or not? -->it work
-    
-    /***test for heart rate---I2C.  */ 
-     /* Set up the I2C interface */
-    HalI2CInit( i2cClock_33KHZ ); // I2C clock rate
-    uint8 task_id = 0;
-    Haptics_Init(task_id);
+    /***test for haptic sensor---I2C.  */ 
 
+    HalI2CInit( i2cClock_267KHZ ); // I2C clock rate
+    uint8 task_id = 0;
+    
+    
+    Haptics_Init(task_id);
+    
+    buffer_w3[0] = DRV2605_LIBRARY;  //choose ROM library
+    buffer_w3[1] = ROM_A;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w3, 1);
+    
+    buffer_w3[0] = DRV2605_MODE;
+    buffer_w3[1] = Int_Trig;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w3, 1);
+
+    buffer_w3[0] = DRV2605_GO;
+    buffer_w3[1] = GO;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w3, 1);
 
     
     while(1)
@@ -137,6 +143,19 @@ int main(void)
         if(checkpoint1 != 0)
           break;
         */
+        buffer_w3[0] = DRV2605_GO;
+        buffer_w3[1] = GO;
+        HalI2CWrite(HAPTICS_ID, 2, buffer_w3, 1);
+        
+        while(1)
+        {
+          buffer_w3[0] = DRV2605_GO;
+          HalI2CWrite(HAPTICS_ID, 1, buffer_w3, 0);
+          HalI2CRead(HAPTICS_ID, 1, &checkpoint1);
+
+          if(checkpoint1 == 0)
+            break;
+        }
     }
     
     return 1;
