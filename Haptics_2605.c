@@ -94,9 +94,17 @@ void Haptics_Init(uint8 task_id)
   
   //Set Defaults
   buffer_w2[0] = DRV2605_MODE;        // Come out of STANDBY
-  buffer_w2[1] = ACTIVE;
+  buffer_w2[1] = Dev_Reset;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
   
+  buffer_w2[0] = DRV2605_MODE;       
+  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
+  HalI2CRead(HAPTICS_ID, 1, &CONTROL1_Values);
+  
+  buffer_w2[0] = DRV2605_MODE;        // Come out of STANDBY
+  buffer_w2[1] = ACTIVE;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+    /*
   buffer_w2[0] = DRV2605_WAVEFORMSEQ1;  //could set all wave register to identifier 1
   buffer_w2[1] = 0x01;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
@@ -120,7 +128,7 @@ void Haptics_Init(uint8 task_id)
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
 
 
-  /*
+
   buffer_w2[0] = DRV2605_MODE;
   buffer_w2[1] = Dev_Reset;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
@@ -132,7 +140,7 @@ void Haptics_Init(uint8 task_id)
   buffer_w2[0] = DRV2605_RATED_VOLTAGE;          //test if reset work?
   HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
   HalI2CRead(HAPTICS_ID, 1, &test_point1);
- */
+ 
   buffer_w2[0] = DRV2605_ODT;
   buffer_w2[1] = 0x00;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
@@ -163,6 +171,63 @@ void Haptics_Init(uint8 task_id)
     Haptics_RunAutoCal_LRA();
   else
     Haptics_RunAutoCal_ERM();
+  */
+  
+  buffer_w2[0] = DRV2605_OD_CLAMP;
+  buffer_w2[1] = RatedVoltage_3p3; //by changing the voltage at here, we could change its strength.
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  buffer_w2[0] = DRV2605_FEEDBACK_CONTROL;
+  buffer_w2[1] = ERM_MODE | FBBrakeFactor_4x | LoopResponse_Fast;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  buffer_w2[0] = DRV2605_CONTROL3;
+  buffer_w2[1] = NGThresh_4PERCENT | ERM_OpenLoop | DataFormat_RTP_Signed | LRADriveMode_Once | InputMode_PWM | LRA_OpenLoop;  
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+
+  
+  buffer_w2[0] = DRV2605_RTP;       
+  buffer_w2[1] = 0x10;  //0x01 - 0x7f same direction, different amplitude
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  //10 is strong and fast, f0 is just fast.
+  buffer_w2[0] = DRV2605_MODE;
+  buffer_w2[1] = RTP;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  buffer_w2[0] = DRV2605_RTP;          //test if before auto calibration finished, it is 1?
+  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
+  HalI2CRead(HAPTICS_ID, 1, &test_point1); 
+  
+  
+  while(1)
+  {
+    //0.9~1.6
+    buffer_w2[0] = DRV2605_RTP;       
+    buffer_w2[1] = 0x01;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+    Haptics_WaitUs(20000);
+    
+    buffer_w2[0] = DRV2605_RTP;       
+    buffer_w2[1] = 0x10;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //0.44v
+    Haptics_WaitUs(20000);
+    
+    buffer_w2[0] = DRV2605_RTP;       
+    buffer_w2[1] = 0x30;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //1.32v
+    Haptics_WaitUs(20000);
+   
+    buffer_w2[0] = DRV2605_RTP;       //2.20v
+    buffer_w2[1] = 0x50;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+    Haptics_WaitUs(20000);
+    
+    buffer_w2[0] = DRV2605_RTP;       //3.0v
+    buffer_w2[1] = 0x70;     //ONCE I connect this voltage, the motor just stop work! also DRV stop work too.
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //DRV even couldn't communicate, only after repowered, it comes back
+    Haptics_WaitUs(20000);
+
+  }  
 }
 
 void Haptics_RunAutoCal_LRA(void)
@@ -198,25 +263,31 @@ void Haptics_RunAutoCal_LRA(void)
 
 void Haptics_RunAutoCal_ERM(void)
 {
+    buffer_w2[0] = DRV2605_STATUS;           
+  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
+  HalI2CRead(HAPTICS_ID, 1, &test_point1);
+  
   // Run AutoCal ERM
+  /*
   buffer_w2[0] = DRV2605_MODE;
   buffer_w2[1] = Auto_Calibration;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
-  
+ 
   // Enable Amplifier
+  
   buffer_w2[0] = DRV2605_RATED_VOLTAGE;
   buffer_w2[1] = RatedVoltage_1p3;
-  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
-  
-  buffer_w2[0] = DRV2605_OD_CLAMP;//problem: read nothing back
-  buffer_w2[1] = RatedVoltage_3p3;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //1110 0000
+   */
+  buffer_w2[0] = DRV2605_OD_CLAMP;
+  buffer_w2[1] = RatedVoltage_3p3; //by changing the voltage at here, we could change its strength.
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
   
   buffer_w2[0] = DRV2605_FEEDBACK_CONTROL;
   buffer_w2[1] = ERM_MODE | FBBrakeFactor_4x | LoopResponse_Fast;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
 
-  
+  /*
   buffer_w2[0] = DRV2605_CONTROL1;  //problem: read nothing back!
   buffer_w2[1] = StartupBoost | DriveTime_2p4m; //0X93 1001 0011
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
@@ -224,25 +295,42 @@ void Haptics_RunAutoCal_ERM(void)
   buffer_w2[0] = DRV2605_CONTROL2;
   buffer_w2[1] = BiDir_Input | AutoResGain_Medium | BlankingTime_Short | IDissTime_Short;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
-  
+  */
   buffer_w2[0] = DRV2605_CONTROL3;
   buffer_w2[1] = NGThresh_4PERCENT | ERM_OpenLoop | DataFormat_RTP_Signed | LRADriveMode_Once | InputMode_PWM | LRA_OpenLoop;  
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
-  
-  //Store Default Selections
-  buffer_w2[0] = DRV2605_CONTROL1;       
-  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
-  HalI2CRead(HAPTICS_ID, 1, &CONTROL1_Values);
-  
-  buffer_w2[0] = DRV2605_CONTROL2;       
-  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
-  HalI2CRead(HAPTICS_ID, 1, &CONTROL2_Values);
-  
-  buffer_w2[0] = DRV2605_CONTROL3;       
-  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
-  HalI2CRead(HAPTICS_ID, 1, &CONTROL3_Values);
-  
 
+  
+  buffer_w2[0] = DRV2605_RTP;       
+  buffer_w2[1] = 0x10;  //0x01 - 0x7f same direction, different amplitude
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  buffer_w2[0] = DRV2605_MODE;
+  buffer_w2[1] = RTP;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  buffer_w2[0] = DRV2605_RTP;          //test if before auto calibration finished, it is 1?
+  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
+  HalI2CRead(HAPTICS_ID, 1, &test_point1); 
+  
+  while(1)
+  {
+    buffer_w2[0] = DRV2605_RTP;       
+    buffer_w2[1] = 0xF0;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+    Haptics_WaitUs(20000);
+    
+    buffer_w2[0] = DRV2605_RTP;       
+    buffer_w2[1] = 0x01;
+    HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+    Haptics_WaitUs(20000);
+
+  }
+  
+  buffer_w2[0] = DRV2605_RTP;          //test if before auto calibration finished, it is 1?
+  HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
+  HalI2CRead(HAPTICS_ID, 1, &test_point1);
+    
   
   buffer_w2[0] = DRV2605_AUTOCAL_MEMIF; //AUTO_CAL_TIME
   buffer_w2[1] = AutoCalTime_500MS;
@@ -252,7 +340,7 @@ void Haptics_RunAutoCal_ERM(void)
   HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
   HalI2CRead(HAPTICS_ID, 1, &test_point1);
   
-/*  */
+/* 
   buffer_w2[0] = DRV2605_GO;
   buffer_w2[1] = GO;
   HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
@@ -275,7 +363,7 @@ void Haptics_RunAutoCal_ERM(void)
     buffer_w2[0] = DRV2605_AUTOCAL_COMP;          //test if caliration setting output anything.--it works!.
     HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
     HalI2CRead(HAPTICS_ID, 1, &test_point1);  
-  
+   */
   buffer_w2[0] = DRV2605_STATUS;       //test if after auto calibration finished, it is 0? 
   HalI2CWrite(HAPTICS_ID, 1, buffer_w2, 0);
   HalI2CRead(HAPTICS_ID, 1, &test_point1);
