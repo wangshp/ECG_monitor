@@ -39,6 +39,11 @@ extern "C"
 
 #define HAPTICS_ENABLE_PIN P0_6 // Change Port init in Haptics_init after
 
+// user
+#define HAPTICS_ID 0x5A
+//1011 0100 read
+
+
 // Waveform Structure Type Definition
 typedef struct Haptics_Waveform {
 	const unsigned char 	inputMode; 		//See Input Modes Above
