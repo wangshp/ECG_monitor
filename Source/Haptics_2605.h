@@ -107,7 +107,8 @@ void Haptics_Init(void);
 
 void haptic_process(void);
 
-//void haptic_config_update(void);
+void haptic_stop(void);
+
 
 #ifdef __cplusplus
 }

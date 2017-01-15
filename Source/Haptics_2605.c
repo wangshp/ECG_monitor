@@ -155,8 +155,8 @@ void Haptics_Init(void)
 }
 
 extern uint8 haptic_start;
-extern uint32 haptic_duration; //10000ms
-extern uint8 vibrate_period; //200ms
+extern uint32 haptic_duration; //s
+extern uint8 vibrate_period; //  *100ms
 
 uint8 haptic_vibrate = 0;
 uint32 haptic_timer = 0;
@@ -173,9 +173,9 @@ void haptic_process(void)
     HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
     }
     
-    if(haptic_timer < (haptic_duration / 20))  //DEFAULT_ECG_PERIOD = 20
+    if(haptic_timer < (haptic_duration * 50))  //DEFAULT_ECG_PERIOD = 20
     {  
-      if((haptic_timer % (vibrate_period / 20)) == 0)
+      if((haptic_timer % (vibrate_period * 5)) == 0)
       {
         if(haptic_vibrate == 1)
         {
@@ -186,7 +186,7 @@ void haptic_process(void)
         }
         else
         {
-          //if()
+          
           buffer_w2[0] = DRV2605_RTP;       
           buffer_w2[1] = vibration_amplitudeH;
           HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //0.44v
@@ -213,10 +213,15 @@ void haptic_process(void)
   }
 }
 
-/*
-void haptic_config_update(void)
+void haptic_stop(void)
 {
-  ecg_GetParameter(ECG_COMMAND);
-}
+  buffer_w2[0] = DRV2605_RTP;       
+  buffer_w2[1] = vibration_amplitudeL;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1); //set to 0.
 
-*/ 
+  buffer_w2[0] = DRV2605_MODE;
+  buffer_w2[1] = STANDBY;
+  HalI2CWrite(HAPTICS_ID, 2, buffer_w2, 1);
+  
+  haptic_timer = 0;
+}
