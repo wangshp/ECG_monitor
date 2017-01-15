@@ -60,7 +60,7 @@
 #include "TI_CC254x_hardware_board.h"
 #include "TI_CC254x_spi.h"
 #include "TI_ADS1293_register_settings.h"
-void test_spi(void);
+
 /**************************************************************************************************
  * @fn          main
  *

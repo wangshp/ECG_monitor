@@ -16,12 +16,7 @@ void ads1299_set_up(void)
   ms_delay(200);    //??? test point:
   //should check time using oscilloscope VCAP1>1.1v
   
-  
-
-/*  ADS_WRITE_command(_RESET);
-  //18*(1/(2*10^6))
-  ms_delay(1);
-*/
+ 
   //RESET
   RESET_ADS = 1;
   us_delay(5);
@@ -33,58 +28,20 @@ void ads1299_set_up(void)
  
   ADS_WRITE_command(_SDATAC);  //before read
   us_delay(4);
-  
-  ads1299_read_reg(CH1SET, space);  //0110 0001after reset, test if reset work
-  us_delay(20);
-  
-  /*test 
-  uint8 space[27];  //be able to read meaningless data at here.
-   while(1)
-  {
-    
-    ads1299_write_reg(CONFIG1, 0x96);
-    us_delay(4);
-    ads1299_read_reg(CONFIG1, space);
-    us_delay(50);
-  }
-  */
-  
-  
-  
-  
-  
-  /*test
-  uint8 space1[4];
-  while(1)
-  {
-  ads1299_read_reg(ID, space1);
-  ms_delay(4);
-  }
-  */
-  ads1299_write_reg(CONFIG3, 0xE0);  // 1110 0000
-  us_delay(4);
-  
-  
-  ads1299_read_reg(CONFIG3, space); //just to make sure i set every register correctly
-  us_delay(4);
-  
 
-  ads1299_write_reg(CONFIG1, 0x94); //changed
-  us_delay(4);
-  ads1299_read_reg(CONFIG1, space);// 1001 0110
+  ads1299_write_reg(CONFIG3, 0xEC);  // 1110 0000  !!changed to set BIAS reference signal source.
   us_delay(4);
   
+  
+  ads1299_write_reg(CONFIG1, 0x95); //changed
+  us_delay(4);
+ 
   /*read noise */
   ads1299_write_reg(CONFIG2, 0xC0); //1100 0000
   us_delay(4);
-  ads1299_read_reg(CONFIG2, space);//
+
+  ads1299_write_reg(CH1SET, 0x81);
   us_delay(4);
-  
-  ads1299_write_reg(CH1SET, 0x60);
-  us_delay(4);
-  ads1299_read_reg(CH1SET, space);//0000 0001
-  us_delay(4);
-  
   ads1299_write_reg(CH2SET, 0x81);
   ms_delay(1);
   ads1299_write_reg(CH3SET, 0x81);
@@ -97,104 +54,17 @@ void ads1299_set_up(void)
   ms_delay(1);
   ads1299_write_reg(CH7SET, 0x81);
   ms_delay(1);
-  ads1299_write_reg(CH8SET, 0x81);
+  
+  ads1299_write_reg(CH8SET, 0x68);
   ms_delay(1);
   
+  ads1299_write_reg(BIAS_SENSP, 0x80);
+  ms_delay(1);
+  ads1299_write_reg(BIAS_SENSN, 0x80);
+  ms_delay(1);
   
-  
-  /*change CHnSET
-  ads1299_write_reg(CONFIG2, 0xD0);
-  us_delay(4);
-  
-  ads1299_write_reg(CH1SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH2SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH3SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH4SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH5SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH6SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH7SET, 0x80);
-  ms_delay(1);
-  ads1299_write_reg(CH8SET, 0x80);
-  ms_delay(1);  
-  */
- 
   
 
-  
-
-
-  
-  
-  /*ACTIVATE TEST SIGNAL   
-  
-  ads1299_write_reg(CONFIG2, 0xD0);
-  us_delay(4);
-  ads1299_read_reg(CONFIG2, space);
-  us_delay(4);
-  
-  ads1299_write_reg(CH1SET, 0x05);
-  us_delay(4);
-  
-  ads1299_read_reg(CH1SET, space);
-  us_delay(4);
-  ads1299_read_reg(CH1SET, space);
-  us_delay(4);
-  
-  ads1299_write_reg(CH2SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH3SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH4SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH5SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH6SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH7SET, 0x05);
-  us_delay(4);
-  ads1299_write_reg(CH8SET, 0x05);
-  us_delay(4);
- */
-    
-  /*test on SPI
-  uint8 space[2];
-  ADS_WRITE_command(_SDATAC);
-  while(1)
-  {
-  ads1299_write_reg(CH1SET, 0x05);
-  us_delay(4);  
-  ads1299_read_reg(CH1SET, space);
-  ms_delay(4);
-  }
-  */
-  
-  /*TEST NORMAL INPUT
-  ads1299_write_reg(CONFIG2, 0xC0);
-  us_delay(4);
-  
-  ads1299_write_reg(CH1SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH2SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH3SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH4SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH5SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH6SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH7SET, 0x00);
-  us_delay(4);
-  ads1299_write_reg(CH8SET, 0x00);
-  us_delay(4);
-  */
   
   
   START_ADS = 1;
@@ -203,16 +73,6 @@ void ads1299_set_up(void)
 //  ADS_WRITE_command(_RDATAC);
   us_delay(4);
   
- /* test  
-  uint8 space[27];  //be able to read meaningless data at here.
-   while(1)
-  {
-    TI_ADS1293_SPIStreamRead(space, 20);
-    ms_delay(4);
-  }
- */
- // ADS_WRITE_command(_SDATAC);  //before read register for test
-  // us_delay(5);
 }
 
 
@@ -280,8 +140,7 @@ void ads1299_read_reg(uint8 ADR, uint8 *register_data)
 
   spiWriteByte(_RREG|ADR);   //ON R27 
   us_delay(5);
-//  spiWriteByte(0xAA);    //test
-//  us_delay(5);
+
   spiWriteByte(0x00);
   us_delay(5);
 
@@ -295,9 +154,7 @@ void ads1299_read_reg(uint8 ADR, uint8 *register_data)
 void TI_ADS1293_SPIStreamRead(uint8 *buffer, uint8 count)
 {
   uint8 i;
-//  static uint32 tst_count = 0;
-//  static uint8 toggle = 0;
-  
+
   CS_ADS = 0;                                                                       // /CS enable
   
   
@@ -322,10 +179,6 @@ void ADS_WRITE_command(uint8 command)
 }
 
 
-
-//set CH1 compare value = 32
-//set clock edge = 1 / 32M
-//delay_us = 32 * (1/32)
 void delay_init(void)
 {
   P0SEL |= 0x04;

@@ -1,4 +1,3 @@
-
 #ifndef HEADER_CC2541_I2C_H
 
 #define HEADER_CC2541_I2C_H
@@ -44,4 +43,3 @@
 
 
 #endif                                                        // HEADER_FILE_TI_ADS1293_H
-

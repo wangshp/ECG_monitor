@@ -52,7 +52,8 @@ extern "C"
 /*********************************************************************
  * CONSTANTS
  */
-
+#define HAL_I2C TRUE
+#define HAL_I2C_MASTER TRUE
 
 // Heart Rate Task Events
 #define START_DEVICE_EVT                              0x0001
