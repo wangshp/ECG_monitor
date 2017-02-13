@@ -1,4 +1,4 @@
-/**************************************************************************************************
+/*************************************************************************************************
   Filename:       heartrate.c
   Revised:        $Date $
   Revision:       $Revision $
@@ -18,7 +18,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
   works of, modify, distribute, perform, display or sell this Software and/or
   its documentation for any purpose.
   YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
-  PROVIDED ¡°AS IS¡± WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+  PROVIDED ???AS IS??¨¤ WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
   INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
   NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
   TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
@@ -45,7 +45,8 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #include "gatt.h"
 #include "gapgattserver.h"
 #include "gattservapp.h"
-#include "heartrateservice.h"
+#include "eegservice.h"
+
 #include "devinfoservice.h"
 #include "battservice.h"
 #include "peripheral.h"
@@ -61,6 +62,14 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #include "ads1299.h"
 #include "hal_i2c.h"
 #include "HR_module.h"
+
+//haptic part
+#include "Haptics_2605.h"
+#include "DRV2605.h"
+
+//service
+#include "hrservice.h"
+
 /*********************************************************************
  * MACROS
  */
@@ -87,7 +96,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 
 // vishy: ios minimum interval is 20ms: change 7 to 16
 // How often to perform heart rate periodic event (vishy: change 7 to 20)
-#define DEFAULT_ECG_PERIOD                    7//14
+#define DEFAULT_ECG_PERIOD                    20
 
 // Whether to enable automatic parameter update request when a connection is formed
 #define DEFAULT_ENABLE_UPDATE_REQUEST         FALSE
@@ -118,6 +127,8 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #define ENERGY_INCREMENT                      10
 #define FLAGS_IDX_MAX                         7
 
+#define DEFAULT_HR_PERIOD                    20
+
 /*********************************************************************
  * TYPEDEFS
  */
@@ -141,7 +152,7 @@ Copyright 2011 Texas Instruments Incorporated. All rights reserved.
 #define CH_DATASIZE 3
 #define NUM_CH 8
 #define STATUSSIZE 3
-#define BUF_SIZE 54   //12*3= 2*6*3 6*2ms *2 =24ms
+#define BUF_SIZE 36   //12*3= 2*6*3 6*2ms *2 =24ms
 #define PKT_DATA_SIZE 27
 
 uint8 dataBufX[BUF_SIZE];
@@ -155,7 +166,6 @@ uint8 dataReadyFlag = 0;
 
 int counter_BLE = 0;
 
-uint32 count_num = 0;
 
   //heart rate module
 uint8 buffer_w[2] = {0, 0};  //data to write
@@ -164,6 +174,13 @@ uint8 buffer_w_2[1];
 uint8 checkpoint1 = 0;       //data that read back
 
 uint8 abc1; //test point
+
+//HAPTIC PART
+uint8 haptic_start = 1;
+uint32 haptic_duration = 10; //10s
+uint8 vibrate_period = 2; //200ms
+extern uint8 vibration_amplitudeH; //0x10~0x30
+
 /*********************************************************************
  * EXTERNAL VARIABLES
  */
@@ -176,6 +193,7 @@ uint8 abc1; //test point
  * LOCAL VARIABLES
  */
 static uint8 ecg_TaskID;   // Task ID for internal task/event processing
+static uint8 hr_TaskID;
 
 static gaprole_States_t gapProfileState = GAPROLE_INIT;
 
@@ -262,6 +280,7 @@ static void ecgMeasNotify(void);
 static void ecgCB(uint8 event);
 static void ecgBattCB(uint8 event);
 
+static void hrPeriodicTask( void );
 /*********************************************************************
  * PROFILE CALLBACKS
  */
@@ -369,11 +388,16 @@ void ecg_Init( uint8 task_id )
   GGS_AddService( GATT_ALL_SERVICES );         // GAP
   GATTServApp_AddService( GATT_ALL_SERVICES ); // GATT attributes
   ecg_AddService( GATT_ALL_SERVICES );
+//heartrate
+  hr_AddService( GATT_ALL_SERVICES );
+  
   DevInfo_AddService( );
   // vishy Batt_AddService( );
   
   // Register for Heart Rate service callback
   ecg_Register( ecgCB );
+//heartrate  
+  hr_Register( ecgCB );
   
   // Register for Battery service callback;
   Batt_Register ( ecgBattCB );
@@ -409,7 +433,7 @@ void ecg_Init( uint8 task_id )
   //vishy
   P1DIR &= ~0x02; // force P1.1 as input: with Vlithium
        
-  // Configure DRDYB (P1_7) for ADS1299
+  /* Configure DRDYB (P1_7) for ADS1299*/
   P1DIR &= ~0x80;     //P1_7 as input                                                         // pin1.7 is input
   PICTL |= 0x04;     // falling edge interrupt
   IRCON2 &= ~0x08;   // clear Port 1 interrupt flag
@@ -431,132 +455,19 @@ void ecg_Init( uint8 task_id )
 
   ads1299_set_up();
   
-  //before doing any operation, I2CSTAT is 0xF8, no interrupt generated 
-  /* Configure DRDYB (P2_0) as interrupt for HR module */ 
-  P2DIR &= ~0x01;     //P2_0 as input                                                         // pin1.7 is input
-  PICTL |= 0x08;     // falling edge interrupt
-  IRCON2 &= ~0x01;   // clear Port 2 interrupt flag
-  P2IFG &= ~0x01;    // clear Port2.0 pin status flag
+  HalI2CInit( i2cClock_267KHZ );
   
-  P2IEN |= 0x01;    // enable P2_0 interrupt
- 
-  IEN2  |= 0x02;      // enable Port2 interrupt
-  
- // EA = 0;   //to make sure interrupt only generated after all configuration
- 
-  
-  /***test for heart rate---I2C. */ 
-   /* Set up the I2C interface 
-  HalI2CInit( i2cClock_267KHZ ); // I2C clock rate
+  Haptics_Init();
 
-  buffer_w[0] = INT_STATUS;      //clear that power up interrupt by read interrupt status register //works
-  HalI2CWrite(HR_ID, 1, buffer_w, 0);
-  HalI2CRead(HR_ID, 1, &checkpoint1);
-  //test point: at here the HR_INT is still high
-  // looks WORKing well, goes to heart rate's ISR not so frequently 
+//  buffer_w[0] = MODE_CFR;
+//  buffer_w[1] = 0x40;         //reset all registers of HR module, //reset works
+//  HalI2CWrite(HR_ID, 2, buffer_w, 1);
 
-  buffer_w[0] = PART_ID;      //clear that power up interrupt by read interrupt status register //works
-  HalI2CWrite(HR_ID, 1, buffer_w, 0);
-  HalI2CRead(HR_ID, 1, &checkpoint1);
-  
-
-  
-  buffer_w[0] = MODE_CFR;
-  buffer_w[1] = 0x40;         //reset all registers of HR module, //reset works
-  HalI2CWrite(HR_ID, 2, buffer_w, 1);
- */
-  
-  
-  
   //test point: after set mode=HR, HR_INT is always HIGH.
   //!wait--but this interrupt is not generated by p2.0
-  //!!what?---generated by I2C 
-  
-  
-  /*purpose: trying to test to figure out "what situation the interrupt will be keeping generated"
-  //-->clear SI won't affect it is still in status to generate interrupt! kind of automatically.
-  I2CCFG = (I2CCFG & ~0x08) | 0x20;      
-  while ((I2CCFG & 0x08) == 0);
-  while (I2CSTAT == 0x18) ;
-  I2CCFG &= ~0x20;
-  I2CCFG = (I2CCFG & ~0x08);
-  */
-  
-  
-/*    while(1)  
-    ;
+  //!!what?--->generated by I2C 
   
 
-  abc1 = I2CCFG;
-  
-  buffer_w[0] = MODE_CFR;
-  buffer_w[1] = 0x02;         //set HR only mode 
-  HalI2CWrite(HR_ID, 2, buffer_w, 1);
-  //test pOint: only read once after set mode will make it keep low
- 
-  //test point: the interrupt will cosumes all the time, it even won't go to the next instruction in main function.
-  //---> solve it by using dataReadyFlag.
-  //IIC is even worse, it will consume all the time!! all the time.
-        while(1)
-  {
-     ;
-  }
-
-  
-  
-      buffer_w[0] = INT_STATUS;      //clear that power up interrupt by read interrupt status register //works
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1); 
-
- 
-  
-  
-  
-  us_delay(500);
-  buffer_w[0] = INT_EN;
-  buffer_w[1] = 0x80;         // mask HR interrupt 
-  HalI2CWrite(HR_ID, 2, buffer_w, 1);
-  
-  buffer_w[0] = SPO2_CONFIG;
-  buffer_w[1] = 0x03;         //set 50SPS, LED pulse width 1600us
-  HalI2CWrite(HR_ID, 2, buffer_w, 1);
- 
-  buffer_w[0] = LED_PWC;
-  buffer_w[1] = 0x03;         //set 
-  HalI2CWrite(HR_ID, 2, buffer_w, 1);
-    
-  ms_delay(2);
-  buffer_w[0] = INT_EN;
-  ms_delay(2);
-  HalI2CWrite(HR_ID, 1, buffer_w, 0);
-  HalI2CRead(HR_ID, 1, &checkpoint1);
-  
-  EA = 1;
-  
-  
-  
-  int a = 0;
-  while(1) //is it because reading is after INT_EN register writng operation?
-    a++;
-  ms_delay(2);
-  buffer_w[0] = MODE_CFR;
-  ms_delay(2);
-  HalI2CWrite(HR_ID, 1, buffer_w, 0);
-  HalI2CRead(HR_ID, 1, &checkpoint1);
-  
-  us_delay(200);
-  buffer_w[0] = FIFO_DATA;
-  HalI2CWrite(HR_ID, 1, buffer_w, 0);
-  HalI2CRead(HR_ID, 1, buffer_w);
-*/
-
-
- 
-//  reg1 = TI_ADS1293_SPIReadReg(TI_ADS1293_ALARM_FILTER_REG);
-//  if (TI_ADS1293_SPIReadReg(TI_ADS1293_ALARM_FILTER_REG) != 0x33)
-//      asm("NOP");
-//***  TI_ADS1293_WriteRegSettings();                                               // Set up ADS1293 for Channel Scan
-  
   // Setup a delayed profile startup
   osal_set_event( ecg_TaskID, START_DEVICE_EVT );
 }
@@ -611,6 +522,8 @@ uint16 ecg_ProcessEvent( uint8 task_id, uint16 events )
 
   if ( events & ECG_PERIODIC_EVT )
   {
+    HalI2CInit( i2cClock_267KHZ ); //???didn't find out the reason where I2C got disabled???
+
  /*
     if (!one_time_flag)
     { uint8 i;
@@ -627,13 +540,20 @@ uint16 ecg_ProcessEvent( uint8 task_id, uint16 events )
     // vishy Restart timer
     if (DEFAULT_ECG_PERIOD) //start periodic heart rate task
     {
+      //ok, it is actually related with nitification enable or not!
       osal_start_timerEx( ecg_TaskID, ECG_PERIODIC_EVT, DEFAULT_ECG_PERIOD );
+      
+      haptic_config_update();
+                      //right now every timer + is DEFAULT_ECG_PERIOD = 20ms.
+                      //so we could check it every 20ms. but we need to enable ECG once to start timer.
+                      //we could improve this part later...
+      haptic_process(); //not the problem of time! then what?
+      
     }
     // Perform periodic heart rate task
 //dataReadyFlag = 1;
 
     
-    count_num++;   //count the num periodic task get called!
     
     if (dataReadyFlag)
     {
@@ -649,6 +569,20 @@ uint16 ecg_ProcessEvent( uint8 task_id, uint16 events )
     ecgBattPeriodicTask();
     
     return (events ^ BATT_PERIODIC_EVT);
+  }
+  
+  if ( events & HR_PERIODIC_EVT )
+  {
+    if (DEFAULT_ECG_PERIOD) //start periodic heart rate task
+    {
+      //ok, it is actually related with notification enable or not!
+      osal_start_timerEx( hr_TaskID, HR_PERIODIC_EVT, DEFAULT_HR_PERIOD );
+    }
+
+    // Perform periodic battery task
+    hrPeriodicTask();
+    
+    return (events ^ HR_PERIODIC_EVT);
   }
 /*
   if ( events & ADS1293_DRDYB_EVT )  //deal with receive data in process but not interrupt, but need connect it with DRDY interrupt~
@@ -753,9 +687,9 @@ static void ecg_HandleKeys( uint8 shift, uint8 keys )
 }
 
 /*********************************************************************
- * @fn      heartRateMeasNotify
+ * @fn      ecgMeasNotify
  *
- * @brief   Prepare and send a heart rate measurement notification
+ * @brief   Prepare and send a ecg measurement notification
  *
  * @return  none
  */
@@ -778,7 +712,44 @@ static void ecgMeasNotify(void)
       if(ecg_MeasNotify( gapConnHandle, &ecgMeas) == SUCCESS)
       {
         counter_BLE++;
-        if(counter_BLE == 3)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
+        if(counter_BLE == 2)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
+        {
+          counter_BLE = 0;
+          dataReadyFlag = 0;  
+          send_buf = NULL;
+        }
+      }
+    } 
+}
+
+/*********************************************************************
+ * @fn      hrMeasNotify
+ *
+ * @brief   Prepare and send a heart rate measurement notification
+ *
+ * @return  none
+ */
+
+static void hrMeasNotify(void)
+{
+  /*
+  uint8 i;
+
+  ecgMeas.len = 18;
+ 
+    //----read data byte from spi
+    
+    //1 status(3 BYTES) + 8 channel * 3 BYTES(24bits)=27 B
+
+    if(dataReadyFlag == 1)
+    {
+      
+      osal_memcpy(&ecgMeas.value[0], &send_buf[counter_BLE * 18], 18);   //maximum size?
+       
+      if(ecg_MeasNotify( gapConnHandle, &ecgMeas) == SUCCESS)
+      {
+        counter_BLE++;
+        if(counter_BLE == 2)    //2*18=36Bytes  12 samples has been sent, then wait for new data filled
         {
           counter_BLE = 0;
           dataReadyFlag = 0;  
@@ -786,7 +757,7 @@ static void ecgMeasNotify(void)
         }
       }
     }
-  
+  */
 }
 
 /*********************************************************************
@@ -883,9 +854,9 @@ static void ecgGapStateCB( gaprole_States_t newState )
 }
 
 /*********************************************************************
- * @fn      heartRateCB
+ * @fn      ecgCB
  *
- * @brief   Callback function for heart rate service.
+ * @brief   Callback function for eeg service.
  *
  * @param   event - service event
  *
@@ -919,6 +890,44 @@ static void ecgCB(uint8 event)
   }
 }
 
+
+/*********************************************************************
+ * @fn      heartRateCB
+ *
+ * @brief   Callback function for heart rate service.
+ *
+ * @param   event - service event
+ *
+ * @return  none
+ */
+static void hrCB(uint8 event)
+{
+  if (event == HR_MEAS_NOTI_ENABLED)
+  {
+    // if connected start periodic measurement
+    if (gapProfileState == GAPROLE_CONNECTED)
+    {
+      osal_start_timerEx( hr_TaskID, HR_PERIODIC_EVT, DEFAULT_HR_PERIOD );
+     // TI_ADS1293_SPIWriteReg(TI_ADS1293_CONFIG_REG, 
+     //                     TI_ADS1293_CONFIG_REG_VALUE | ADS1293_START_CONV);   // start conversion
+      //ecg_running = TRUE;
+    } 
+  }
+  else if (event == HR_MEAS_NOTI_DISABLED)
+  {
+    // stop periodic measurement
+    osal_stop_timerEx( hr_TaskID, HR_PERIODIC_EVT );
+   // TI_ADS1293_SPIWriteReg(TI_ADS1293_CONFIG_REG, 
+   //                       TI_ADS1293_CONFIG_REG_VALUE & ADS1293_STOP_CONV);    // stop conversion    
+    //ecg_running = FALSE;
+  }
+  else if (event == HR_COMMAND_SET)
+  {
+    // reset energy expended
+//    ecgEnergy = 0;
+  }
+}
+
 /*********************************************************************
  * @fn      heartRateBattCB
  *
@@ -946,7 +955,7 @@ static void ecgBattCB(uint8 event)
 }
 
 /*********************************************************************
- * @fn      heartRatePeriodicTask
+ * @fn      ecgPeriodicTask
  *
  * @brief   Perform a periodic heart rate application task.
  *
@@ -986,6 +995,23 @@ static void ecgBattPeriodicTask( void )
   }
 }
 
+/*********************************************************************
+ * @fn      heartRatePeriodicTask
+ *
+ * @brief   Perform a periodic heart rate application task.
+ *
+ * @param   none
+ *
+ * @return  none
+ */
+static void hrPeriodicTask( void )
+{
+  if (gapProfileState == GAPROLE_CONNECTED)
+  {
+    hrMeasNotify();
+  }
+}
+
 int counter_ADS = 0;
 
 /*********************************************************************
@@ -1020,7 +1046,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
     spiWriteByte(_RDATA);    
     us_delay(10);
     
-    //read and dismiss the 3 status bytes+ 7*3 data bytes of ADS.
+    //read and dismiss the 3 status bytes of ADS.
     for(int i = 0; i<8; i++)
     {
       spiReadByte((&blank_buf), 0xFF);
@@ -1035,7 +1061,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
     CS_ADS = 1;
     
     //no flag contrain, no ADS waiting, keep data continuous.
-    if(counter_ADS > 53)  //36bytes will takes 12*2ms = 24ms or 12*4ms= 48ms
+    if(counter_ADS > 35)  //36bytes will takes 12*2ms = 24ms or 12*4ms= 48ms
     {      
       send_buf = recv_buf;
       if (recv_buf == dataBufX)  //keep sending to another buffer.
@@ -1044,6 +1070,7 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
         recv_buf = dataBufX;
       dataReadyFlag = 1; 
       counter_ADS = 0;
+
     } 
   }
 
@@ -1058,8 +1085,9 @@ __near_func __interrupt void TI_ADS1293_DRDY_PORTx(void)
 //observe: even after i comment the ISR, if i enable PORT2's interrupt, it will keep calling ISR.
 //try: maybe mask SI after using it in I2C transfer will be useful.
 
-//16*20=320ms   16*4=64bytes--0.03ms*8*64=
-/*for HR interrupt p2_0
+//interrupt period: 16*20=320ms   
+//16*4=64bytes--0.03ms*8*64=
+/*for HR interrupt p2_0*/
 #pragma vector = P2INT_VECTOR
 __interrupt void TI_ADS1299_HR_INT(void)
 {
@@ -1100,7 +1128,39 @@ __interrupt void TI_ADS1299_HR_INT(void)
   }
   EA = 1;
 }
-*/
+
+uint8 haptic_config = 0;
+void haptic_config_update(void)
+{
+  ecg_GetParameter(ECG_COMMAND, &haptic_config);
+  if(haptic_config == 0x01)
+    haptic_start = 1;              
+  else if(haptic_config == 0x02)
+  {
+    haptic_start = 0;
+    haptic_stop();
+  }
+  else if(haptic_config == 0x03)
+    haptic_duration++;             //*m
+  else if(haptic_config == 0x04)
+    haptic_duration--;
+  else if(haptic_config == 0x05)
+    vibrate_period++;              //*100ms
+  else if(haptic_config == 0x06)
+    vibrate_period--;
+  else if(haptic_config == 0x07)
+    vibration_amplitudeH = vibration_amplitudeH + 0x05;
+  else if(haptic_config == 0x08)
+    vibration_amplitudeH = vibration_amplitudeH - 0x05;
+  
+  if(vibration_amplitudeH > 0x31)
+    vibration_amplitudeH = 0x30;
+  if(vibration_amplitudeH < 0x10)
+    vibration_amplitudeH = 0x10;
+  
+  haptic_config = 0;
+  ecg_SetParameter(ECG_COMMAND, sizeof (uint8), &haptic_config);
+}
 
 
 
