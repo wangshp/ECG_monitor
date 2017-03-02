@@ -1,17 +1,12 @@
 /******************************************************************************
-
  @file  KeyFob_Main.c
-
  @brief This file contains the main and callback functions
-
  Group: WCS, BTS
  Target Device: CC2540, CC2541
-
  ******************************************************************************
  
  Copyright (c) 2009-2016, Texas Instruments Incorporated
  All rights reserved.
-
  IMPORTANT: Your use of this Software is limited to those specific rights
  granted under the terms of a software license agreement between the user
  who downloaded the software, his/her employer (which must be your employer)
@@ -24,9 +19,8 @@
  the foregoing purpose, you may not use, reproduce, copy, prepare derivative
  works of, modify, distribute, perform, display or sell this Software and/or
  its documentation for any purpose.
-
  YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
- PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ PROVIDED ¡°AS IS¡± WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE,
  NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
  TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
@@ -36,10 +30,8 @@
  OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, COST OF PROCUREMENT
  OF SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
  (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
-
  Should you have any questions regarding your right to use this Software,
  contact Texas Instruments Incorporated at www.TI.com.
-
  ******************************************************************************
  Release Name: ble_sdk_1.4.2.2
  Release Date: 2016-06-09 06:57:10
@@ -105,7 +97,7 @@ int main(void)
     P1DIR |= BIT0;      // Output.
     P1_0 = 0;           // LED1 off.
     
-    uint32 a = 10000;
+    uint32 a = 100000;
     
     
     
@@ -121,115 +113,57 @@ int main(void)
     
    // EA = 0;   //to make sure interrupt only generated after all configuration
    
-    IEN2  &= (~0x02);      // 111 disable Port2 interrupt-->to know if I2C work in this way or not? -->it work
+    IEN2  &= (~0x02);      // 111 disable Port2 interrupt-->to know if I2C work in this way or not? -->it NOT work
     
     /***test for heart rate---I2C.  */ 
      /* Set up the I2C interface */
     HalI2CInit( i2cClock_165KHZ ); // I2C clock rate
     
+    while(a--){}
+    a =  1000;
+    
     buffer_w[0] = INT_STATUS;      //clear power up interrupt
     HalI2CWrite(HR_ID, 1, buffer_w, 0);
     HalI2CRead(HR_ID, 1, &checkpoint1);
-    
-    buffer_w[0] = SPO2_CONFIG;
-    buffer_w[1] = 0x20;         
-    HalI2CWrite(HR_ID, 2, buffer_w, 1); 
-
-    buffer_w[0] = SPO2_CONFIG;      
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);
-   
-    buffer_w[0] = MODE_CFR;
-    buffer_w[1] = 0x02;         //set HR only mode 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1); //after set mode, it triggers power ready interrupt.
-    
-    while(a--){}
-    a =  1000;
-    
-    buffer_w[0] = SPO2_CONFIG;      
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);
-    
-    buffer_w[0] = MODE_CFR;      
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);    
-    
-    buffer_w[0] = MODE_CFR;      //clear power up interrupt
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);
-    
-    
-    buffer_w[0] = INT_EN;
-    buffer_w[1] = 0x02;         //set HR only mode 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1); //after set mode, it triggers power ready interrupt.
-    
-    buffer_w[0] = INT_EN;      //clear power up interrupt
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);
-    
-    
-    
-    /*configuration:
-    buffer_w[0] = MODE_CFR;
-    buffer_w[1] = 0x40;         //reset 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1);
-    */
-    buffer_w[0] = MODE_CFR;      //clear power up interrupt
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1); 
-    
-    buffer_w[0] = LED_PWC;
-    buffer_w[1] = 0xFF;         //set 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1);
-    
-    buffer_w[0] = MODE_CFR;
-    buffer_w[1] = 0x02;         //set HR only mode 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1); //after set mode, it triggers power ready interrupt.
-    
-    buffer_w[0] = MODE_CFR;      
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1); 
-    
-    buffer_w[0] = LED_PWC;      
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);
-
-    while(a--){}
-    a =  1000;
-    
-    buffer_w[0] = LED_PWC;      //clear power up interrupt
-    HalI2CWrite(HR_ID, 1, buffer_w, 0);
-    HalI2CRead(HR_ID, 1, &checkpoint1);  
 
     
-    
-    buffer_w[0] = INT_EN;
-    buffer_w[1] = 0xA0;         // enable only HR interrupt 
+    buffer_w[0] = LED_PWC;  //0X09
+    buffer_w[1] = 0xAA;         //set led current
     HalI2CWrite(HR_ID, 2, buffer_w, 1);
-    
- 
-    
-    buffer_w[0] = LED_PWC;
-    buffer_w[1] = 0xFF;         //set 
-    HalI2CWrite(HR_ID, 2, buffer_w, 1);
-    
-    buffer_w[0] = SPO2_CONFIG;
+
+    buffer_w[0] = SPO2_CONFIG; //0X07
     buffer_w[1] = 0x07;         //set 50SPS, LED pulse width 1600us
     HalI2CWrite(HR_ID, 2, buffer_w, 1);
     
+    buffer_w[0] = MODE_CFR; //0X06
+    buffer_w[1] = 0x02;         //set HR only mode 
+    HalI2CWrite(HR_ID, 2, buffer_w, 1); //after set mode, it triggers power ready interrupt.
 
-    buffer_w[0] = INT_STATUS;      //clear power up interrupt
+    buffer_w[0] = MODE_CFR;      
+    HalI2CWrite(HR_ID, 1, buffer_w, 0);
+    HalI2CRead(HR_ID, 1, &checkpoint1);
+    
+    buffer_w[0] = INT_EN;  //0X01
+    buffer_w[1] = 0xA0;         // enable only HR interrupt 
+    HalI2CWrite(HR_ID, 2, buffer_w, 1);
+
+    int d = 1000;
+    while(d--){;}
+    
+    buffer_w[0] = FIFO_DATA;      
     HalI2CWrite(HR_ID, 1, buffer_w, 0);
     HalI2CRead(HR_ID, 1, &checkpoint1);
 
-
-    
     while(1)
     {
       
         while(a--){}
-        a =  10000;
+        a =  1000;
         P1_0 = ~ P1_0; 
+        
+       buffer_w[0] = FIFO_DATA;      
+        HalI2CWrite(HR_ID, 1, buffer_w, 0);
+        HalI2CRead(HR_ID, 1, &checkpoint1);     
         /*
         buffer_w[0] = INT_STATUS;      //clear power up interrupt
         HalI2CWrite(HR_ID, 1, buffer_w, 0);
