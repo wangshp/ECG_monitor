@@ -17,6 +17,14 @@
 #ifndef HEADER_FILE_TI_CC254x_SPI_H
 #define HEADER_FILE_TI_CC254x_SPI_H
 
+#include <hal_board_cfg.h>
+
+#define CS              P1_2
+
+#define CS_DISABLED     1
+#define CS_ENABLED      0
+
+
 void TI_ADS1293_SPISetup(void);
 void TI_ADS1293_SPIWriteReg(uint8, uint8);
 uint8 TI_ADS1293_SPIReadReg(uint8);

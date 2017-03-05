@@ -24,16 +24,6 @@
 // P1_2 = /CS
 // P1_7 = /DRDY
 
-#define CS              P1_2
 
-#define DRDYB           P1_7
-#define ALARM           P1_6
-
-#define CS_DISABLED     1
-#define CS_ENABLED      0
-
-#define LED             P1_0
-#define LED_ENABLED     1
-#define LED_DISABLED    0
 
 #endif                                                                         // HEADER_FILE_TI_CC254x_HARDWARE_BOARD_H

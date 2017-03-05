@@ -52,7 +52,8 @@ extern "C"
 /*********************************************************************
  * CONSTANTS
  */
-
+#define HAL_I2C TRUE
+#define HAL_I2C_MASTER TRUE
 
 // Heart Rate Task Events
 #define START_DEVICE_EVT                              0x0001
@@ -60,6 +61,7 @@ extern "C"
 #define BATT_PERIODIC_EVT                             0x0004
 #define ADS1293_DRDYB_EVT                             0x0008
 
+#define HR_PERIODIC_EVT                               0x0010
 /*********************************************************************
  * MACROS
  */
@@ -77,6 +79,11 @@ extern void ecg_Init( uint8 task_id );
  * Task Event Processor for the BLE Application
  */
 extern uint16 ecg_ProcessEvent( uint8 task_id, uint16 events );
+
+
+//user
+void haptic_config_update(void);
+
 
 /*********************************************************************
 *********************************************************************/

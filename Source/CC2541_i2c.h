@@ -1,4 +1,3 @@
-
 #ifndef HEADER_CC2541_I2C_H
 
 #define HEADER_CC2541_I2C_H
@@ -25,23 +24,14 @@
 #define I2CCFG_CR_DIV_60                  (0x82)  // 533 kHz at 32MHz system clock
   
 
-
-
-
-
-
-
-
-
 // Define size of buffer and number of bytes to send.
-#define I2C_BUFFER_SIZE 0xFF
-#define I2C_SLAVE_ADDRESS 0x53    // 7-bit addressing.
-#define I2C_HR_WADD 0xAE
-#define I2C_HR_RADD 0xAF
+#define I2C_BUFFER_SIZE                    0xFF
+#define I2C_SLAVE_ADDRESS                  0x53    // 7-bit addressing.
+#define I2C_HR_WADD                        0xAE
+#define I2C_HR_RADD                        0xAF
 
-#define I2C_READ_FROM_SLAVE 0x01
-#define I2C_WRITE_TO_SLAVE 0x00
+#define I2C_READ_FROM_SLAVE                0x01
+#define I2C_WRITE_TO_SLAVE                 0x00
 
 
 #endif                                                        // HEADER_FILE_TI_ADS1293_H
-

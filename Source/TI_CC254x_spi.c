@@ -48,8 +48,6 @@
 *******************************************************************************/
 
 #include "TI_ADS1293.h"
-#include "TI_CC254x.h"
-#include "TI_CC254x_hardware_board.h"
 #include "TI_CC254x_spi.h"
 #include "TI_ADS1293_register_settings.h"
 
@@ -58,7 +56,7 @@
 void spiWriteByte(uint8 write);
 void spiReadByte(uint8 *read, uint8 write);
 //------------------------------------------------------------------------------
-//  void TI_ADS1293_SPISetup(void)
+
 //
 //  DESCRIPTION:
 //  Configures the assigned interface to function as a SPI port and
@@ -134,7 +132,6 @@ uint8 TI_ADS1293_SPIReadReg(uint8 addr)
  
   inst = ADS1293_READ_BIT | addr;                                              // register address
   
-//  WAIT_1_3US(2);                                                               // Wait 
   spiWriteByte(inst);                                                          // Send lower register address  
   
   spiReadByte(&pVal, 0xFF);                                                     // Read data

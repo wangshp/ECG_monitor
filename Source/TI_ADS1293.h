@@ -10,7 +10,7 @@
 //   February 2012
 //   Built with CCE Version: 4.2 and IAR Embedded Workbench Version:  5.3x
 //------------------------------------------------------------------------------
-// Change Log:
+// Change Log:TI_ADS1293.h
 //------------------------------------------------------------------------------
 // Version:  1.00
 // Comments: Initial Release Version
